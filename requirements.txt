@@ -1,3 +1,5 @@
 streamlit
 pandas
-oblib
+joblib
+libxml2
+seaborn
