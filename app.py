@@ -6,9 +6,9 @@ from sklearn.model_selection import train_test_split
 from xgboost import XGBClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score
 from imblearn.over_sampling import SMOTE
-from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import classification_report
-import json  # Make sure to import the json module for parsing JSON strings
+import json
+from datetime import datetime
 
 # Custom function to parse datetime from specific format
 def custom_datetime_parser(dt_str):
@@ -16,23 +16,26 @@ def custom_datetime_parser(dt_str):
         # Assuming the format is DDMMYYYYHHMM
         return datetime.strptime(dt_str, '%d%m%Y%H%M')
     except ValueError as e:
-        # Handle the error or return a default value
-        st.error(f"DateTime parsing error: {e}")
+        # Handle the error
+        print(f"DateTime parsing error: {e}")
         return pd.NaT  # 'Not a Time' for missing or erroneous datetime values
 
 # Function to simulate the dataset based on JSON input
 def create_dataframe(json_input):
+    # Parsing dateTimeTransaction using the custom parser for each transaction
+    for transaction in json_input:
+        if 'dateTimeTransaction' in transaction:
+            transaction['dateTimeTransaction'] = custom_datetime_parser(transaction['dateTimeTransaction'])
     df_transactions = pd.DataFrame(json_input)
+    # Ensuring dateTimeTransaction is datetime in case any parsing was skipped or failed
+    df_transactions['dateTimeTransaction'] = pd.to_datetime(df_transactions['dateTimeTransaction'], errors='coerce')
     return df_transactions
 
 # Encoding and feature engineering
 def preprocess_data(df_transactions):
     encoder = LabelEncoder()
-    df_transactions['merchantCategoryCode_encoded'] = encoder.fit_transform(df_transactions['merchantCategoryCode'])
-    df_transactions['transactionType_encoded'] = encoder.fit_transform(df_transactions['transactionType'])
-    df_transactions['transactionCurrencyCode_encoded'] = encoder.fit_transform(df_transactions['transactionCurrencyCode'])
-    df_transactions['international_encoded'] = encoder.fit_transform(df_transactions['international'])
-    df_transactions['authorisationStatus_encoded'] = encoder.fit_transform(df_transactions['authorisationStatus'])
+    for column in ['merchantCategoryCode', 'transactionType', 'transactionCurrencyCode', 'international', 'authorisationStatus']:
+        df_transactions[f'{column}_encoded'] = encoder.fit_transform(df_transactions[column])
     
     df_transactions['hourOfDay'] = df_transactions['dateTimeTransaction'].dt.hour
     df_transactions['dayOfWeek'] = df_transactions['dateTimeTransaction'].dt.dayofweek
@@ -75,16 +78,6 @@ if st.button('Detect Fraud'):
         try:
             input_data = json.loads(json_input)
             
-            # Parse dateTimeTransaction using the custom parser
-            for item in input_data:
-                if 'dateTimeTransaction' in item:
-                    item['dateTimeTransaction'] = custom_datetime_parser(item['dateTimeTransaction'])
-            
-            # The rest of your processing logic here
-            df_transactions = create_dataframe(input_data)
-            
-            # Ensure dateTimeTransaction is datetime if any parsing was skipped or failed
-            df_transactions['dateTimeTransaction'] = pd.to_datetime(df_transactions['dateTimeTransaction'], errors='coerce')
             df_transactions = create_dataframe(input_data)
             df_transactions, features = preprocess_data(df_transactions)
             df_transactions = assign_fraud_label(df_transactions)
