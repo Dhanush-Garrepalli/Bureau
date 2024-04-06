@@ -13,29 +13,30 @@ from datetime import datetime
 # Custom function to parse datetime from specific format
 def custom_datetime_parser(dt_str):
     try:
-        # Assuming the format is DDMMYYYYHHMM
         return datetime.strptime(dt_str, '%d%m%Y%H%M')
     except ValueError as e:
-        # Handle the error
         print(f"DateTime parsing error: {e}")
-        return pd.NaT  # 'Not a Time' for missing or erroneous datetime values
+        return pd.NaT
 
-# Function to simulate the dataset based on JSON input
+# Adjusted function to handle single or multiple transactions
 def create_dataframe(json_input):
-    # Parsing dateTimeTransaction using the custom parser for each transaction
+    # Wrap the dictionary in a list if it's not already a list
+    if isinstance(json_input, dict):
+        json_input = [json_input]
     for transaction in json_input:
         if 'dateTimeTransaction' in transaction:
             transaction['dateTimeTransaction'] = custom_datetime_parser(transaction['dateTimeTransaction'])
     df_transactions = pd.DataFrame(json_input)
-    # Ensuring dateTimeTransaction is datetime in case any parsing was skipped or failed
     df_transactions['dateTimeTransaction'] = pd.to_datetime(df_transactions['dateTimeTransaction'], errors='coerce')
     return df_transactions
 
-# Encoding and feature engineering
 def preprocess_data(df_transactions):
     encoder = LabelEncoder()
-    for column in ['merchantCategoryCode', 'transactionType', 'transactionCurrencyCode', 'international', 'authorisationStatus']:
-        df_transactions[f'{column}_encoded'] = encoder.fit_transform(df_transactions[column])
+    df_transactions['merchantCategoryCode_encoded'] = encoder.fit_transform(df_transactions['merchantCategoryCode'])
+    df_transactions['transactionType_encoded'] = encoder.fit_transform(df_transactions['transactionType'])
+    df_transactions['transactionCurrencyCode_encoded'] = encoder.fit_transform(df_transactions['transactionCurrencyCode'])
+    df_transactions['international_encoded'] = encoder.fit_transform(df_transactions['international'].astype(int))  # Convert boolean to int
+    df_transactions['authorisationStatus_encoded'] = encoder.fit_transform(df_transactions['authorisationStatus'].astype(int))  # Convert boolean to int
     
     df_transactions['hourOfDay'] = df_transactions['dateTimeTransaction'].dt.hour
     df_transactions['dayOfWeek'] = df_transactions['dateTimeTransaction'].dt.dayofweek
@@ -68,6 +69,9 @@ def train_model(X_train, y_train):
     )
     model.fit(X_train, y_train)
     return model
+
+# Streamlit UI code goes here (unchanged for brevity)
+
 
 # Streamlit UI
 st.title('Fraud Detection System')
