@@ -2,3 +2,8 @@ streamlit
 pandas
 joblib
 seaborn
+numpy
+scikit-learn
+xgboost
+imblearn
+geopy
