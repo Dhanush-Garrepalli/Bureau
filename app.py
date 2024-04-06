@@ -4,9 +4,8 @@ import numpy as np
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from xgboost import XGBClassifier
-from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
 from imblearn.over_sampling import SMOTE
-from sklearn.metrics import classification_report
 import json
 from datetime import datetime
 
@@ -15,18 +14,19 @@ def custom_datetime_parser(dt_str):
     try:
         return datetime.strptime(dt_str, '%d%m%Y%H%M')
     except ValueError as e:
-        print(f"DateTime parsing error: {e}")
+        st.error(f"DateTime parsing error: {e}")
         return pd.NaT
 
 # Function to create a DataFrame from JSON input
 def create_dataframe(json_input):
-    if isinstance(json_input, dict):  # Wrap single transaction in a list
+    if isinstance(json_input, dict):  # Wrap the single transaction in a list
         json_input = [json_input]
     for transaction in json_input:
         if 'dateTimeTransaction' in transaction:
             transaction['dateTimeTransaction'] = custom_datetime_parser(transaction['dateTimeTransaction'])
     df_transactions = pd.DataFrame(json_input)
-    for field in ['transactionAmount', 'cardBalance', 'cardholderBillingConversionRate']:
+    numeric_fields = ['transactionAmount', 'cardBalance', 'cardholderBillingConversionRate']
+    for field in numeric_fields:
         df_transactions[field] = pd.to_numeric(df_transactions[field], errors='coerce')
     df_transactions['dateTimeTransaction'] = pd.to_datetime(df_transactions['dateTimeTransaction'], errors='coerce')
     return df_transactions
@@ -34,8 +34,11 @@ def create_dataframe(json_input):
 # Preprocess and encode features
 def preprocess_data(df_transactions):
     encoder = LabelEncoder()
-    for column in ['merchantCategoryCode', 'transactionType', 'transactionCurrencyCode', 'international', 'authorisationStatus']:
-        df_transactions[f'{column}_encoded'] = encoder.fit_transform(df_transactions[column].astype(str))
+    df_transactions['merchantCategoryCode_encoded'] = encoder.fit_transform(df_transactions['merchantCategoryCode'])
+    df_transactions['transactionType_encoded'] = encoder.fit_transform(df_transactions['transactionType'])
+    df_transactions['transactionCurrencyCode_encoded'] = encoder.fit_transform(df_transactions['transactionCurrencyCode'])
+    df_transactions['international_encoded'] = encoder.fit_transform(df_transactions['international'].astype(int))
+    df_transactions['authorisationStatus_encoded'] = encoder.fit_transform(df_transactions['authorisationStatus'].astype(int))
     
     df_transactions['hourOfDay'] = df_transactions['dateTimeTransaction'].dt.hour
     df_transactions['dayOfWeek'] = df_transactions['dateTimeTransaction'].dt.dayofweek
@@ -55,7 +58,9 @@ def assign_fraud_label(df_transactions):
 
 # Train a simplified machine learning model
 def train_model(X_train, y_train):
-    model = XGBClassifier(use_label_encoder=False, eval_metric='logloss', learning_rate=0.1, n_estimators=100, max_depth=5, subsample=0.8, colsample_bytree=0.8, gamma=1, random_state=42)
+    model = XGBClassifier(use_label_encoder=False, eval_metric='logloss',
+                          learning_rate=0.1, n_estimators=100, max_depth=5,
+                          subsample=0.8, colsample_bytree=0.8, gamma=1, random_state=42)
     model.fit(X_train, y_train)
     return model
 
@@ -75,30 +80,30 @@ if st.button('Detect Fraud'):
             if len(df_transactions) > 1:
                 X = df_transactions[features]
                 y = df_transactions['isFraud']
-                test_size = min(0.3, (len(X) - 1) / len(X))
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=0.3, random_state=42, stratify=y)
                 
-                minority_class_size = min(np.bincount(y_train))
-                if minority_class_size > 1:
-                    n_neighbors = min(5, minority_class_size - 1)
-                    smote = SMOTE(random_state=42, n_neighbors=n_neighbors)
-                    X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
-                else:
-                    X_train_smote, y_train_smote = X_train, y_train
+                # Handle SMOTE only if there's enough data
+                if len(np.unique(y_train)) > 1:  # Ensure more than one class in y_train
+                    smote = SMOTE(random_state=42)
+                    X_train, y_train = smote.fit_resample(X_train, y_train)
                 
-                model = train_model(X_train_smote, y_train_smote)
-                
+                model = train_model(X_train, y_train)
                 predictions = model.predict(X_test)
                 accuracy = accuracy_score(y_test, predictions)
-                roc_auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
-                classification_rep = classification_report(y_test, predictions, zero_division=0)
-
                 st.write(f"Model Accuracy: {accuracy}")
-                st.write(f"ROC AUC Score: {roc_auc}")
+                
+                try:
+                    roc_auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
+                    st.write(f"ROC AUC Score: {roc_auc}")
+                except ValueError:
+                    st.write("ROC AUC score cannot be calculated due to insufficient class representation.")
+                
+                classification_rep = classification_report(y_test, predictions, zero_division=0)
                 st.write("Classification Report:")
                 st.text(classification_rep)
             else:
-                st.error("Please provide more data to enable model training and evaluation.")
+                st.error("Insufficient data to train and test the model. Please provide more data.")
         except Exception as e:
             st.error(f"Error processing input: {e}")
     else:
