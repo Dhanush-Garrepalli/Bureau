@@ -77,33 +77,34 @@ if st.button('Detect Fraud'):
             df_transactions, features = preprocess_data(df_transactions)
             df_transactions = assign_fraud_label(df_transactions)
 
-            if len(df_transactions) > 1:
+            # Check class distribution
+            if len(df_transactions['isFraud'].unique()) > 1 and df_transactions['isFraud'].value_counts().min() > 1:
                 X = df_transactions[features]
                 y = df_transactions['isFraud']
+                
+                # Stratified train-test split
                 X_train, X_test, y_train, y_test = train_test_split(
                     X, y, test_size=0.3, random_state=42, stratify=y)
                 
-                # Handle SMOTE only if there's enough data
-                if len(np.unique(y_train)) > 1:  # Ensure more than one class in y_train
+                # SMOTE application conditional on class distribution
+                if y_train.value_counts().min() > 1:
                     smote = SMOTE(random_state=42)
                     X_train, y_train = smote.fit_resample(X_train, y_train)
                 
                 model = train_model(X_train, y_train)
+                
+                # Evaluation metrics calculation
                 predictions = model.predict(X_test)
                 accuracy = accuracy_score(y_test, predictions)
                 st.write(f"Model Accuracy: {accuracy}")
                 
-                try:
-                    roc_auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
-                    st.write(f"ROC AUC Score: {roc_auc}")
-                except ValueError:
-                    st.write("ROC AUC score cannot be calculated due to insufficient class representation.")
-                
+                # Safe to calculate classification report as we've ensured class representation
                 classification_rep = classification_report(y_test, predictions, zero_division=0)
                 st.write("Classification Report:")
                 st.text(classification_rep)
             else:
-                st.error("Insufficient data to train and test the model. Please provide more data.")
+                st.error("The dataset must contain at least two samples for each class for stratified sampling and SMOTE.")
+                
         except Exception as e:
             st.error(f"Error processing input: {e}")
     else:
