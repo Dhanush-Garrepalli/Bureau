@@ -84,35 +84,42 @@ def train_model(X_train, y_train):
 st.title('Fraud Detection System')
 
 json_input = st.text_area("Input Transactions in JSON Format", '{}', height=300)
+# Streamlit UI and data preprocessing code omitted for brevity
+
 if st.button('Detect Fraud'):
     if json_input:
         try:
             input_data = json.loads(json_input)
-            
             df_transactions = create_dataframe(input_data)
             df_transactions, features = preprocess_data(df_transactions)
             df_transactions = assign_fraud_label(df_transactions)
 
-            X = df_transactions[features]
-            y = df_transactions['isFraud']
+            # Check if the dataset contains enough samples for splitting
+            if len(df_transactions) > 1:
+                X = df_transactions[features]
+                y = df_transactions['isFraud']
 
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-            
-            # SMOTE to handle imbalanced data
-            smote = SMOTE(random_state=42)
-            X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
-            
-            model = train_model(X_train_smote, y_train_smote)
-            
-            predictions = model.predict(X_test)
-            accuracy = accuracy_score(y_test, predictions)
-            roc_auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
-            classification_rep = classification_report(y_test, predictions, zero_division=0)
+                # Ensure the test set is not too large for the dataset
+                test_size = min(0.3, (len(X) - 1) / len(X))
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+                
+                # SMOTE to handle imbalanced data
+                smote = SMOTE(random_state=42)
+                X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
+                
+                model = train_model(X_train_smote, y_train_smote)
+                
+                predictions = model.predict(X_test)
+                accuracy = accuracy_score(y_test, predictions)
+                roc_auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
+                classification_rep = classification_report(y_test, predictions, zero_division=0)
 
-            st.write(f"Model Accuracy: {accuracy}")
-            st.write(f"ROC AUC Score: {roc_auc}")
-            st.write("Classification Report:")
-            st.text(classification_rep)
+                st.write(f"Model Accuracy: {accuracy}")
+                st.write(f"ROC AUC Score: {roc_auc}")
+                st.write("Classification Report:")
+                st.text(classification_rep)
+            else:
+                st.error("Please provide more data to enable model training and evaluation.")
         except Exception as e:
             st.error(f"Error processing input: {e}")
     else:
