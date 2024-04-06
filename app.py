@@ -10,6 +10,16 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import classification_report
 import json  # Make sure to import the json module for parsing JSON strings
 
+# Custom function to parse datetime from specific format
+def custom_datetime_parser(dt_str):
+    try:
+        # Assuming the format is DDMMYYYYHHMM
+        return datetime.strptime(dt_str, '%d%m%Y%H%M')
+    except ValueError as e:
+        # Handle the error or return a default value
+        st.error(f"DateTime parsing error: {e}")
+        return pd.NaT  # 'Not a Time' for missing or erroneous datetime values
+
 # Function to simulate the dataset based on JSON input
 def create_dataframe(json_input):
     df_transactions = pd.DataFrame(json_input)
@@ -63,9 +73,18 @@ json_input = st.text_area("Input Transactions in JSON Format", '{}', height=300)
 if st.button('Detect Fraud'):
     if json_input:
         try:
-            # Parsing the JSON input string into Python objects
             input_data = json.loads(json_input)
-            input_data['dateTimeTransaction'] = pd.to_datetime(input_data['dateTimeTransaction'])
+            
+            # Parse dateTimeTransaction using the custom parser
+            for item in input_data:
+                if 'dateTimeTransaction' in item:
+                    item['dateTimeTransaction'] = custom_datetime_parser(item['dateTimeTransaction'])
+            
+            # The rest of your processing logic here
+            df_transactions = create_dataframe(input_data)
+            
+            # Ensure dateTimeTransaction is datetime if any parsing was skipped or failed
+            df_transactions['dateTimeTransaction'] = pd.to_datetime(df_transactions['dateTimeTransaction'], errors='coerce')
             df_transactions = create_dataframe(input_data)
             df_transactions, features = preprocess_data(df_transactions)
             df_transactions = assign_fraud_label(df_transactions)
