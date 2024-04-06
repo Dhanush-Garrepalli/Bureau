@@ -1,12 +1,6 @@
-The error you're encountering suggests there might be an issue with the way the JSON data is being processed or parsed, particularly when it's being converted into a pandas DataFrame. This can occur if the JSON structure is not as expected. To ensure robust handling of JSON input from the Streamlit UI, let's make a slight modification to how the JSON is parsed and handled, ensuring it can accommodate a variety of input formats.
-
-Below is the revised code with an additional step to explicitly parse the JSON string using Python's built-in `json.loads()` before attempting to create a pandas DataFrame. This approach provides more control over handling the input data and error messages, making the code more resilient to different JSON structures.
-
-```python
 import streamlit as st
 import pandas as pd
 import numpy as np
-import json  # Import the json module
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from xgboost import XGBClassifier
@@ -14,11 +8,10 @@ from sklearn.metrics import accuracy_score, roc_auc_score
 from imblearn.over_sampling import SMOTE
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import classification_report
-from geopy.distance import great_circle
+import json  # Make sure to import the json module for parsing JSON strings
 
 # Function to simulate the dataset based on JSON input
 def create_dataframe(json_input):
-    # Convert JSON input (which is now a dict or list) directly to a DataFrame
     df_transactions = pd.DataFrame(json_input)
     return df_transactions
 
@@ -70,14 +63,10 @@ json_input = st.text_area("Input Transactions in JSON Format", '{}', height=300)
 if st.button('Detect Fraud'):
     if json_input:
         try:
-            # Use json.loads() to parse the JSON string input
+            # Parsing the JSON input string into Python objects
             input_data = json.loads(json_input)
-            # Ensure input_data is a list of dictionaries
-            if not isinstance(input_data, list) or not all(isinstance(item, dict) for item in input_data):
-                raise ValueError("Input must be a list of JSON objects.")
-                
+            input_data['dateTimeTransaction'] = pd.to_datetime(input_data['dateTimeTransaction'])
             df_transactions = create_dataframe(input_data)
-            df_transactions['dateTimeTransaction'] = pd.to_datetime(df_transactions['dateTimeTransaction'])
             df_transactions, features = preprocess_data(df_transactions)
             df_transactions = assign_fraud_label(df_transactions)
 
@@ -86,7 +75,7 @@ if st.button('Detect Fraud'):
 
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
             
-            # SMOTE
+            # SMOTE to handle imbalanced data
             smote = SMOTE(random_state=42)
             X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
             
@@ -97,4 +86,11 @@ if st.button('Detect Fraud'):
             roc_auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
             classification_rep = classification_report(y_test, predictions, zero_division=0)
 
-            st.write
+            st.write(f"Model Accuracy: {accuracy}")
+            st.write(f"ROC AUC Score: {roc_auc}")
+            st.write("Classification Report:")
+            st.text(classification_rep)
+        except Exception as e:
+            st.error(f"Error processing input: {e}")
+    else:
+        st.error("Please input transaction data in JSON format.")
