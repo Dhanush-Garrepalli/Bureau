@@ -10,6 +10,7 @@ from sklearn.metrics import classification_report
 import json
 from datetime import datetime
 
+
 # Custom function to parse datetime from specific format
 def custom_datetime_parser(dt_str):
     try:
@@ -103,9 +104,15 @@ if st.button('Detect Fraud'):
                 test_size = min(0.3, (len(X) - 1) / len(X))
                 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
                 
-                # SMOTE to handle imbalanced data
-                smote = SMOTE(random_state=42)
-                X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
+               minority_class_size = min(np.bincount(y_train))
+                if minority_class_size > 1:  # More than one sample in the minority class
+                    # Adjust n_neighbors if necessary
+                    n_neighbors = min(5, minority_class_size - 1)
+                    smote = SMOTE(random_state=42, n_neighbors=n_neighbors)
+                    X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
+                else:
+                    # Not enough samples for SMOTE; proceed without oversampling
+                    X_train_smote, y_train_smote = X_train, y_train
                 
                 model = train_model(X_train_smote, y_train_smote)
                 
