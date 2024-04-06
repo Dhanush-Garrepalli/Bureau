@@ -27,6 +27,10 @@ def create_dataframe(json_input):
         if 'dateTimeTransaction' in transaction:
             transaction['dateTimeTransaction'] = custom_datetime_parser(transaction['dateTimeTransaction'])
     df_transactions = pd.DataFrame(json_input)
+    # Convert relevant fields from strings to appropriate numeric types
+    numeric_fields = ['transactionAmount', 'cardBalance', 'cardholderBillingConversionRate']
+    for field in numeric_fields:
+        df_transactions[field] = pd.to_numeric(df_transactions[field], errors='coerce')
     df_transactions['dateTimeTransaction'] = pd.to_datetime(df_transactions['dateTimeTransaction'], errors='coerce')
     return df_transactions
 
@@ -69,6 +73,9 @@ def train_model(X_train, y_train):
     )
     model.fit(X_train, y_train)
     return model
+
+# Streamlit UI code goes here (unchanged for brevity)
+
 
 # Streamlit UI code goes here (unchanged for brevity)
 
